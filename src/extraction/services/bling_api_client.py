@@ -86,8 +86,8 @@ class BlingClient():
     def _handle_token_response(self, response: requests.Response) -> None:
         if response.status_code == 200:
             payload = response.json()
-            set_key(self.DOTENV_PATH, "BLING_ACCESS_TOKEN", payload["access_token"])
-            set_key(self.DOTENV_PATH, "BLING_REFRESH_TOKEN", payload["refresh_token"])
+            set_key(self.DOTENV_PATH, "BLING_ACCESS_TOKEN", payload["access_token"], quote_mode="never")
+            set_key(self.DOTENV_PATH, "BLING_REFRESH_TOKEN", payload["refresh_token"], quote_mode="never")
             load_dotenv(self.DOTENV_PATH)
             print("Tokens atualizados com sucesso!")
         else:
