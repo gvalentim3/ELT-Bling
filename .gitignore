@@ -1,2 +1,5 @@
 .venv
 .env
+data/raw/*.json
+exemplos
+__pycache__
