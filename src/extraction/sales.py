@@ -12,7 +12,7 @@ ROOT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if ROOT_PATH not in sys.path:
     sys.path.append(ROOT_PATH)
 
-from extraction.utils.paralellism import process_pre_batched
+from src.extraction.utils.paralellism import process_pre_batched
 
 from src.extraction.services.bling_api_client import BlingClient
 from typing import Dict, Any, List
