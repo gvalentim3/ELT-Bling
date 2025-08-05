@@ -18,6 +18,7 @@ class BlingClient():
         return value
 
     def _get_access_token(self) -> str:
+        load_dotenv(self.DOTENV_PATH, override=True)
         token = self._get_env_var("BLING_ACCESS_TOKEN")
         if not token:
             raise ValueError("Access token não disponível. Execute generate_tokens() primeiro.")
@@ -88,7 +89,7 @@ class BlingClient():
             payload = response.json()
             set_key(self.DOTENV_PATH, "BLING_ACCESS_TOKEN", payload["access_token"], quote_mode="never")
             set_key(self.DOTENV_PATH, "BLING_REFRESH_TOKEN", payload["refresh_token"], quote_mode="never")
-            load_dotenv(self.DOTENV_PATH)
+            load_dotenv(self.DOTENV_PATH, override=True)
             print("Tokens atualizados com sucesso!")
         else:
             error_msg = f"Erro {response.status_code}: {response.text}"
