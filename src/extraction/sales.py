@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
-import logging
 import sys
+from typing import Dict, List, Any
+import logging
 from venv import logger
-import requests
 import json
 from pathlib import Path
 import os
@@ -12,26 +12,23 @@ ROOT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if ROOT_PATH not in sys.path:
     sys.path.append(ROOT_PATH)
 
-from src.extraction.utils.paralellism import process_pre_batched
+from extraction.common.concurrency import process_pre_batched
+from extraction.common.bling_api_client import BlingClient
 
-from src.extraction.services.bling_api_client import BlingClient
-from typing import Dict, Any, List
+logger = logging.getLogger(__name__)
 
-def extract_all_sales_orders_ids(url: str, headers: Dict[str, str], initial_params: Dict[str, str]) -> Dict[int, List[str]]:
+def extract_all_sales_orders_ids(client: BlingClient, endpoint: str, initial_params: Dict[str, str]) -> Dict[int, List[str]]:
     current_page = 1
     all_orders_ids = {}
     limit = initial_params.get('limite', 100)
     start_time = datetime.now(timezone.utc)
+    collected_ids = 0
 
     while True:
         params = initial_params.copy()
         params['pagina'] = current_page
 
-        response = requests.get(
-            url=url,
-            params=params,
-            headers=headers
-        )
+        response = client.get(endpoint=endpoint, params=params)
 
         response.raise_for_status()
         data = response.json()
@@ -42,7 +39,7 @@ def extract_all_sales_orders_ids(url: str, headers: Dict[str, str], initial_para
         page_ids = [order['id'] for order in data['data']]
         all_orders_ids[current_page] = page_ids
 
-        print(f"Página {current_page}: {len(page_ids)} ids coletados")
+        collected_ids += len(page_ids)
         
         if len(data['data']) < limit:
             break
@@ -50,43 +47,9 @@ def extract_all_sales_orders_ids(url: str, headers: Dict[str, str], initial_para
         current_page += 1
 
     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
-    print(f"\nExtração de IDs de venda completa em {duration:.2f} segundos")
+    logger.info(f"\nExtração de {collected_ids} IDs de venda completa em {duration:.2f} segundos")
 
-    return all_orders_ids        
-
-def handle_requests(base_url: str, headers: Dict[str, str], ids_dict: Dict[str, str], params: Dict[str, str]):
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-        
-    try:
-        results = process_pre_batched(
-            ids_dict, 
-            base_url, 
-            headers,
-            max_workers=3,
-            reqs_per_second=3,
-            show_progress=True
-        )
-
-        consolidated_data = consolidate_results(results, params)
-
-        return consolidated_data
-        
-    except Exception as e:
-        logger.error(f"Erro: {e}")
-        sys.exit(1)
-
-def save_raw_sales_orders(data: Dict[str, Any], output_dir: Path, params: Dict[str, str] = None):
-    start_date = params.get('dataInicial').replace("-", "")
-    end_date = params.get('dataFinal').replace("-", "")
-    
-    output_file = output_dir / f"raw_sales_orders_{start_date}_{end_date}.json"
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    return all_orders_ids
 
 def consolidate_results(results: Dict, params: Dict) -> Dict[str, Any]:
     consolidated = {
@@ -118,9 +81,46 @@ def consolidate_results(results: Dict, params: Dict) -> Dict[str, Any]:
     consolidated["metadata"]["total_orders"] = len(consolidated["orders"])
 
     return consolidated
- 
 
+def handle_requests(client: BlingClient, endpoint: str, ids_dict: Dict[str, str], params: Dict[str, str]):
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+        
+    try:
+        results = process_pre_batched(
+            batched_dict=ids_dict, 
+            endpoint=endpoint, 
+            client=client,
+            max_workers=3,
+            reqs_per_second=3,
+            show_progress=True
+        )
+
+        consolidated_data = consolidate_results(results, params)
+
+        return consolidated_data
+        
+    except Exception as e:
+        logger.error(f"Erro: {e}")
+        sys.exit(1)
+
+def save_raw_sales_orders(data: Dict[str, Any], output_dir: Path, params: Dict[str, str] = None):
+    start_date = params.get('dataInicial').replace("-", "")
+    end_date = params.get('dataFinal').replace("-", "")
+    
+    output_file = output_dir / f"raw_sales_orders_{start_date}_{end_date}.json"
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    with open(output_file, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+ 
 def sales_extraction(dataInicial: str, dataFinal: str, client: BlingClient, headers: Dict[str, str]):
+    """
+    dataInicial and dataFinal are always expected in the YYYY-MM-DD format.
+    """
+    
     date_pattern = r'^\d{4}-\d{2}-\d{2}$'
 
     if not re.match(date_pattern, dataInicial):
@@ -129,9 +129,9 @@ def sales_extraction(dataInicial: str, dataFinal: str, client: BlingClient, head
     if not re.match(date_pattern, dataFinal):
         raise ValueError(f"dataFinal must be in YYYY-MM-DD format. Received: {dataFinal}")
 
-    print("Iniciando a extração dos dados de venda do Bling!")
+    logger.info("Iniciando a extração dos dados de venda do Bling!")
 
-    base_url = client.get_api_url("pedidos/vendas")
+    endpoint="pedidos/vendas"
 
     params = {
         "limite": 100,
@@ -139,8 +139,8 @@ def sales_extraction(dataInicial: str, dataFinal: str, client: BlingClient, head
         "dataFinal": dataFinal
     }
 
-    ids_dict = extract_all_sales_orders_ids(url=base_url, headers=headers, initial_params=params)
+    ids_dict = extract_all_sales_orders_ids(client=client, endpoint=endpoint, initial_params=params)
 
-    data = handle_requests(base_url=base_url, headers=headers, ids_dict=ids_dict, params=params)
+    data = handle_requests(client=client, endpoint=endpoint, ids_dict=ids_dict, params=params)
 
     save_raw_sales_orders(data, Path("data/raw"), params=params)
