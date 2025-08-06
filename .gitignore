@@ -4,3 +4,4 @@ data/raw/*.json
 exemplos
 __pycache__
 .vscode
+state.json
