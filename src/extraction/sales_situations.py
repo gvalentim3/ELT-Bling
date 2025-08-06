@@ -1,42 +1,44 @@
-from datetime import datetime
-import requests
+from datetime import datetime, timezone
 import json
+import logging
 from pathlib import Path
-from .services.bling_api_client import BlingClient
-from typing import Dict, Any
+import requests
+from .common.bling_api_client import BlingClient
+from typing import Dict, Any, List, Optional
 
-def extract_sales_situations(client: BlingClient) -> Dict[str, Any]:
-    url = client.get_api_url("situacoes/modulos/98310")
-    headers = client.get_default_headers()
+logger = logging.getLogger(__name__)
 
-    response = requests.get(
-        url=url,
-        headers=headers,
-        timeout=10
-    )
-    response.raise_for_status()
-
+def consolidate_sales_situations_results(data: List[Dict[str, Any]], params: Dict = {}) -> Dict[str, Any]:
     metadata = {
-        "extraction_date": datetime.now()
+        "extraction_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "extraction_params": params,
+        "total_records": len(data)
     }
 
     return {
         "metadata": metadata,
-        "data": response.json()
+        "data": data
     }
 
 def save_raw_sales_situations(data: Dict[str, Any], output_dir: Path) -> None:
-    output_file = output_dir / "sales_situations.json"
+    output_file = output_dir / "raw_sales_situations.json"
     output_file.parent.mkdir(parents=True, exist_ok=True)
     
+    logger.info(f"Salvando dados de situações de venda em: {output_file}!")
     with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)  
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
-def main(client: BlingClient) -> None:
+def extract_sales_situations(client: BlingClient, output_dir: Path) -> Optional[List[Dict[str, Any]]]:
     try:
-        raw_data = extract_sales_situations(client=client)
-        output_dir = Path(__file__).parent.parent / "data/raw"
-        save_raw_sales_situations(raw_data, output_dir)
-    except Exception as e:
-        print(f"Pipeline failed: {str(e)}")
-        raise
+        logger.info("Extraindo as situações de venda no Bling!")
+        response = client.get(endpoint="situacoes/modulos/98310")
+
+        data = response.json()
+
+        consolidated_data = consolidate_sales_situations_results(data=data.get('data', []))
+    
+        save_raw_sales_situations(data=consolidated_data, output_dir=output_dir)
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Erro ao extrair situações de venda: {e}")
+        return None

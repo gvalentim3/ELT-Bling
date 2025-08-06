@@ -1,42 +1,44 @@
-from datetime import datetime
-import requests
+from datetime import datetime, timezone
 import json
+import logging
 from pathlib import Path
-from .services.bling_api_client import BlingClient
-from typing import Dict, Any
+import requests
+from .common.bling_api_client import BlingClient
+from typing import Dict, Any, List, Optional
 
-def extract_product_categories(client: BlingClient) -> Dict[str, Any]:
-    url = client.get_api_url("categorias/produtos")
-    headers = client.get_default_headers()
+logger = logging.getLogger(__name__)
 
-    response = requests.get(
-        url=url,
-        headers=headers,
-        timeout=10
-    )
-    response.raise_for_status()
-
+def consolidate_product_categories_results(data: List[Dict[str, Any]], params: Dict = {}) -> Dict[str, Any]:
     metadata = {
-        "extraction_date": datetime.now()
+        "extraction_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "extraction_params": params,
+        "total_records": len(data)
     }
 
     return {
         "metadata": metadata,
-        "data": response.json()
+        "data": data
     }
 
 def save_raw_product_categories(data: Dict[str, Any], output_dir: Path) -> None:
     output_file = output_dir / "raw_product_categories.json"
     output_file.parent.mkdir(parents=True, exist_ok=True)
     
+    logger.info(f"Salvando dados de categorias de produtos em: {output_file}!")
     with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)  
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
-def main(client: BlingClient) -> None:
+def extract_product_categories(client: BlingClient, output_dir: Path) -> Optional[List[Dict[str, Any]]]:
     try:
-        raw_data = extract_product_categories(client=client)
-        output_dir = Path(__file__).parent.parent / "data/raw"
-        save_raw_product_categories(raw_data, output_dir)
-    except Exception as e:
-        print(f"Pipeline failed: {str(e)}")
-        raise
+        logger.info("Extraindo as categorias de produtos no Bling!")
+        response = client.get(endpoint="categorias/produtos")
+
+        data = response.json()
+
+        consolidated_data = consolidate_product_categories_results(data=data.get('data', []))
+    
+        save_raw_product_categories(data=consolidated_data, output_dir=output_dir)
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Erro ao extrair categorias de produtos: {e}")
+        return None
