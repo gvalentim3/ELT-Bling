@@ -3,8 +3,16 @@ import json
 import logging
 from pathlib import Path
 import requests
-from .common.bling_api_client import BlingClient
 from typing import Dict, Any, List, Optional
+import os
+import sys
+
+ROOT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if ROOT_PATH not in sys.path:
+    sys.path.append(ROOT_PATH)
+
+from .common.bling_api_client import BlingClient
+
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +30,7 @@ def consolidate_sales_channels_results(data: List[Dict[str, Any]], params: Dict 
     }
 
 def save_raw_sales_channels(data: Dict[str, Any], output_dir: Path) -> None:
-    output_file = output_dir / "raw_sales_channels.json"
+    output_file = output_dir / Path("raw_sales_channels.json")
     output_file.parent.mkdir(parents=True, exist_ok=True)
     
     logger.info(f"Salvando dados de canais de venda em: {output_file}!")

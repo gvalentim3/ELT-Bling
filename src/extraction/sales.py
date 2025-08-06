@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import sys
+import time
 from typing import Dict, List, Any
 import logging
 from venv import logger
@@ -8,12 +9,12 @@ from pathlib import Path
 import os
 import re
 
-ROOT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+ROOT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if ROOT_PATH not in sys.path:
-    sys.path.append(ROOT_PATH)
+    sys.path.insert(0, ROOT_PATH)
 
-from extraction.common.concurrency import process_pre_batched
-from extraction.common.bling_api_client import BlingClient
+from .common.concurrency import process_pre_batched
+from .common.bling_api_client import BlingClient
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,58 @@ def extract_all_sales_orders_ids(client: BlingClient, endpoint: str, initial_par
 
     return all_orders_ids
 
-def consolidate_results(results: Dict, params: Dict) -> Dict[str, Any]:
+def retry_failed_ids(client: BlingClient, endpoint: str, failed_ids: List[str], params: Dict[str, str], max_retries: int = 3) -> Dict[str, Any]:
+    retry_results = {
+        "success": [],
+        "failed": [],
+        "retry_summary": {
+            "total_retried": len(failed_ids),
+            "successful_retries": 0,
+            "permanent_failures": 0
+        }
+    }
+    
+    if not failed_ids:
+        return retry_results
+    
+    logger.info(f"Iniciando retry sequencial de {len(failed_ids)} IDs falhados...")
+    
+    for product_id in failed_ids:
+        retry_count = 0
+        success = False
+        
+        while retry_count < max_retries and not success:
+            try:
+                if retry_count > 0:
+                    wait_time = 2 ** retry_count
+                    logger.info(f"Aguardando {wait_time}s antes do retry {retry_count + 1} para ID {product_id}")
+                    time.sleep(wait_time)
+                
+                response = client.get(endpoint=f"{endpoint}/{product_id}", params=params)
+                response.raise_for_status()
+                
+                product_data = response.json()
+                retry_results["success"].append(product_data)
+                retry_results["retry_summary"]["successful_retries"] += 1
+                
+                logger.info(f"Retry bem-sucedido para ID {product_id} na tentativa {retry_count + 1}")
+                success = True
+                
+            except Exception as e:
+                retry_count += 1
+                logger.warning(f"Retry {retry_count}/{max_retries} falhado para ID {product_id}: {str(e)}")
+                
+                if retry_count >= max_retries:
+                    retry_results["failed"].append(product_id)
+                    retry_results["retry_summary"]["permanent_failures"] += 1
+                    logger.error(f"ID {product_id} falhou permanentemente após {max_retries} tentativas")
+    
+    logger.info(f"Retry concluído: {retry_results['retry_summary']['successful_retries']} sucessos, "
+                f"{retry_results['retry_summary']['permanent_failures']} falhas permanentes")
+    
+    return retry_results
+
+def consolidate_results(results: Dict, params: Dict, client: BlingClient = None, endpoint: str = None) -> Dict[str, Any]:
     consolidated = {
         "metadata": {
             "extraction_timestamp": datetime.now().isoformat(),
@@ -64,6 +116,8 @@ def consolidate_results(results: Dict, params: Dict) -> Dict[str, Any]:
         "processing_summary": {}
     }
     
+    all_failed_ids = []
+    
     for batch_name, batch_result in results.items():
         batch_summary = {
             "successful_count": len(batch_result['success']),
@@ -75,10 +129,49 @@ def consolidate_results(results: Dict, params: Dict) -> Dict[str, Any]:
         consolidated["metadata"]["successful_extractions"] += batch_summary["successful_count"]
         consolidated["metadata"]["failed_extractions"] += batch_summary["failed_count"]
         
-        for order_data in batch_result['success']:
-            consolidated["orders"].append(order_data)
+        for orders_data in batch_result['success']:
+            consolidated["orders"].append(orders_data)
+
+        all_failed_ids.extend(batch_result['failed'])
+    
+    if all_failed_ids and client and endpoint:
+        logger.info(f"Encontrados {len(all_failed_ids)} IDs falhados. Iniciando processo de retry...")
+        
+        retry_results = retry_failed_ids(
+            client=client, 
+            endpoint=endpoint, 
+            failed_ids=all_failed_ids, 
+            params=params,
+            max_retries=3
+        )
+        
+        consolidated["orders"].extend(retry_results["success"])
+        
+        consolidated["metadata"]["successful_extractions"] += retry_results["retry_summary"]["successful_retries"]
+        consolidated["metadata"]["failed_extractions"] = (
+            consolidated["metadata"]["failed_extractions"] - 
+            retry_results["retry_summary"]["successful_retries"] + 
+            retry_results["retry_summary"]["permanent_failures"]
+        )
+        
+        consolidated["metadata"]["retry_summary"] = retry_results["retry_summary"]
+        
+        for batch_name in consolidated["processing_summary"]:
+            consolidated["processing_summary"][batch_name]["failed_ids"] = []
+            consolidated["processing_summary"][batch_name]["failed_count"] = 0
+        
+        if retry_results["retry_summary"]["permanent_failures"] > 0:
+            consolidated["processing_summary"]["permanent_failures"] = {
+                "successful_count": 0,
+                "failed_count": retry_results["retry_summary"]["permanent_failures"],
+                "failed_ids": retry_results["failed"]
+            }
     
     consolidated["metadata"]["total_orders"] = len(consolidated["orders"])
+    
+    logger.info(f"Consolidação completa: {consolidated['metadata']['total_orders']} produtos extraídos com sucesso")
+    if consolidated["metadata"]["failed_extractions"] > 0:
+        logger.warning(f"{consolidated['metadata']['failed_extractions']} extrações permanentemente falharam")
 
     return consolidated
 
@@ -98,8 +191,12 @@ def handle_requests(client: BlingClient, endpoint: str, ids_dict: Dict[str, str]
             show_progress=True
         )
 
-        consolidated_data = consolidate_results(results, params)
-
+        consolidated_data = consolidate_results(
+            results=results, 
+            params=params, 
+            client=client, 
+            endpoint=endpoint
+        )
         return consolidated_data
         
     except Exception as e:
@@ -110,13 +207,13 @@ def save_raw_sales_orders(data: Dict[str, Any], output_dir: Path, params: Dict[s
     start_date = params.get('dataInicial').replace("-", "")
     end_date = params.get('dataFinal').replace("-", "")
     
-    output_file = output_dir / f"raw_sales_orders_{start_date}_{end_date}.json"
+    output_file = output_dir / Path(f"raw_sales_orders_{start_date}_{end_date}.json")
     output_file.parent.mkdir(parents=True, exist_ok=True)
     
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
  
-def sales_extraction(dataInicial: str, dataFinal: str, client: BlingClient, headers: Dict[str, str]):
+def sales_extraction(client: BlingClient, dataInicial: str, dataFinal: str, output_dir: Path):
     """
     dataInicial and dataFinal are always expected in the YYYY-MM-DD format.
     """
@@ -143,4 +240,4 @@ def sales_extraction(dataInicial: str, dataFinal: str, client: BlingClient, head
 
     data = handle_requests(client=client, endpoint=endpoint, ids_dict=ids_dict, params=params)
 
-    save_raw_sales_orders(data, Path("data/raw"), params=params)
+    save_raw_sales_orders(data, output_dir=output_dir, params=params)
