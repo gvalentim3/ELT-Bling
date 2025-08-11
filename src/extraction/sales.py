@@ -3,11 +3,11 @@ import sys
 import time
 from typing import Dict, List, Any
 import logging
-from venv import logger
 import json
 from pathlib import Path
 import os
 import re
+from google.cloud.storage import Bucket
 
 ROOT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if ROOT_PATH not in sys.path:
@@ -203,17 +203,22 @@ def handle_requests(client: BlingClient, endpoint: str, ids_dict: Dict[str, str]
         logger.error(f"Erro: {e}")
         sys.exit(1)
 
-def save_raw_sales_orders(data: Dict[str, Any], output_dir: Path, params: Dict[str, str] = None):
+def save_raw_sales_orders(data: Dict[str, Any], storage_bucket: Bucket, params: Dict[str, str] = None):
     start_date = params.get('dataInicial').replace("-", "")
     end_date = params.get('dataFinal').replace("-", "")
     
-    output_file = output_dir / Path(f"raw_sales_orders_{start_date}_{end_date}.json")
-    output_file.parent.mkdir(parents=True, exist_ok=True)
+    destination_blob_name = f"raw/sales_data/week_{start_date}_{end_date}/raw_sales_orders_{start_date}_{end_date}.json"
+
+    blob = storage_bucket.blob(destination_blob_name)
+
+    blob.upload_from_string(
+        data=json.dumps(data, ensure_ascii=False, indent=4),
+        content_type="application/json"
+    )
     
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    logger.info(f"Salvando dados de pedidos de venda em: gs://{storage_bucket.name}/{destination_blob_name}...")
  
-def sales_extraction(client: BlingClient, dataInicial: str, dataFinal: str, output_dir: Path):
+def sales_extraction(client: BlingClient, dataInicial: str, dataFinal: str, storage_bucket: Bucket):
     """
     dataInicial and dataFinal are always expected in the YYYY-MM-DD format.
     """
@@ -240,4 +245,4 @@ def sales_extraction(client: BlingClient, dataInicial: str, dataFinal: str, outp
 
     data = handle_requests(client=client, endpoint=endpoint, ids_dict=ids_dict, params=params)
 
-    save_raw_sales_orders(data, output_dir=output_dir, params=params)
+    save_raw_sales_orders(data, storage_bucket=storage_bucket, params=params)

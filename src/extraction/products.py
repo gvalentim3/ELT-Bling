@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import os
 import time
+from google.cloud.storage import Bucket
 
 ROOT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if ROOT_PATH not in sys.path:
@@ -174,7 +175,6 @@ def consolidate_results(results: Dict, params: Dict, client: BlingClient = None,
 
     return consolidated
 
-
 def handle_requests(client: BlingClient, endpoint: str, ids_dict: Dict[str, str], params: Dict[str, str]):
     logging.basicConfig(
         level=logging.INFO,
@@ -203,14 +203,19 @@ def handle_requests(client: BlingClient, endpoint: str, ids_dict: Dict[str, str]
         logger.error(f"Erro: {e}")
         sys.exit(1)
 
-def save_raw_products(data: Dict[str, Any], output_dir: Path):
-    output_file = output_dir / Path("raw_products.json")
-    output_file.parent.mkdir(parents=True, exist_ok=True)
+def save_raw_products(data: Dict[str, Any], storage_bucket: Bucket):
+    destination_blob_name = "raw/products_data/raw_products.json"
+
+    blob = storage_bucket.blob(destination_blob_name)
+
+    blob.upload_from_string(
+        data=json.dumps(data, ensure_ascii=False, indent=4),
+        content_type="application/json"
+    )
     
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    logger.info(f"Salvando dados de produtos em: gs://{storage_bucket.name}/{destination_blob_name}...")
  
-def products_extraction(client: BlingClient, output_dir: Path):
+def products_extraction(client: BlingClient, storage_bucket: Bucket):
     logger.info("Iniciando a extração dos dados de produtos do Bling!")
 
     endpoint="produtos"
@@ -223,4 +228,4 @@ def products_extraction(client: BlingClient, output_dir: Path):
 
     data = handle_requests(client=client, endpoint=endpoint, ids_dict=ids_dict, params=params)
 
-    save_raw_products(data=data, output_dir=output_dir)
+    save_raw_products(data=data, storage_bucket=storage_bucket)

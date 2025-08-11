@@ -6,6 +6,7 @@ import requests
 from typing import Dict, Any, List, Optional
 import os
 import sys
+from google.cloud.storage import Bucket
 
 ROOT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if ROOT_PATH not in sys.path:
@@ -29,15 +30,19 @@ def consolidate_sales_channels_results(data: List[Dict[str, Any]], params: Dict 
         "data": data
     }
 
-def save_raw_sales_channels(data: Dict[str, Any], output_dir: Path) -> None:
-    output_file = output_dir / Path("raw_sales_channels.json")
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    
-    logger.info(f"Salvando dados de canais de venda em: {output_file}!")
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+def save_raw_sales_channels(data: Dict[str, Any], storage_bucket: Bucket):
+    destination_blob_name = "raw/dim_data/raw_sales_channels.json"
 
-def extract_sales_channels(client: BlingClient, output_dir: Path) -> Optional[List[Dict[str, Any]]]:
+    blob = storage_bucket.blob(destination_blob_name)
+
+    blob.upload_from_string(
+        data=json.dumps(data, ensure_ascii=False, indent=4),
+        content_type="application/json"
+    )
+    
+    logger.info(f"Salvando dados de canais de venda em: gs://{storage_bucket.name}/{destination_blob_name}...")
+
+def extract_sales_channels(client: BlingClient, storage_bucket: Bucket) -> Optional[List[Dict[str, Any]]]:
     try:
         logger.info("Extraindo dados de canais de venda no Bling!")
         response = client.get(endpoint="canais-venda")
@@ -46,7 +51,7 @@ def extract_sales_channels(client: BlingClient, output_dir: Path) -> Optional[Li
 
         consolidated_data = consolidate_sales_channels_results(data=data.get('data', []))
     
-        save_raw_sales_channels(data=consolidated_data, output_dir=output_dir)
+        save_raw_sales_channels(data=consolidated_data, storage_bucket=storage_bucket)
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Erro ao extrair dados de canais de venda: {e}")

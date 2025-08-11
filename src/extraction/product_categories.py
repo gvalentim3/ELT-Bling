@@ -6,6 +6,7 @@ import requests
 from typing import Dict, Any, List, Optional
 import os
 import sys
+from google.cloud.storage import Bucket
 
 ROOT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if ROOT_PATH not in sys.path:
@@ -27,15 +28,19 @@ def consolidate_product_categories_results(data: List[Dict[str, Any]], params: D
         "data": data
     }
 
-def save_raw_product_categories(data: Dict[str, Any], output_dir: Path) -> None:
-    output_file = output_dir / Path("raw_product_categories.json")
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    
-    logger.info(f"Salvando dados de categorias de produtos em: {output_file}!")
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+def save_raw_product_categories(data: Dict[str, Any], storage_bucket: Bucket) -> None:
+    destination_blob_name = "raw/dim_data/raw_product_categories.json"
 
-def extract_product_categories(client: BlingClient, output_dir: Path) -> Optional[List[Dict[str, Any]]]:
+    blob = storage_bucket.blob(destination_blob_name)
+
+    blob.upload_from_string(
+        data=json.dumps(data, ensure_ascii=False, indent=4),
+        content_type="application/json"
+    )
+    
+    logger.info(f"Salvando dados de categorias de produtos em: gs://{storage_bucket.name}/{destination_blob_name}...")
+
+def extract_product_categories(client: BlingClient, storage_bucket: Bucket) -> Optional[List[Dict[str, Any]]]:
     try:
         logger.info("Extraindo as categorias de produtos no Bling!")
         response = client.get(endpoint="categorias/produtos")
@@ -44,7 +49,7 @@ def extract_product_categories(client: BlingClient, output_dir: Path) -> Optiona
 
         consolidated_data = consolidate_product_categories_results(data=data.get('data', []))
     
-        save_raw_product_categories(data=consolidated_data, output_dir=output_dir)
+        save_raw_product_categories(data=consolidated_data, storage_bucket=storage_bucket)
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Erro ao extrair categorias de produtos: {e}")
