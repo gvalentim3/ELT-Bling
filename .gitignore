@@ -5,3 +5,4 @@ exemplos
 __pycache__
 .vscode
 state.json
+credentials
