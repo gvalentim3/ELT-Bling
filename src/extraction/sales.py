@@ -4,7 +4,6 @@ import time
 from typing import Dict, List, Any
 import logging
 import json
-from pathlib import Path
 import os
 import re
 from google.cloud.storage import Bucket
@@ -204,16 +203,23 @@ def handle_requests(client: BlingClient, endpoint: str, ids_dict: Dict[str, str]
         sys.exit(1)
 
 def save_raw_sales_orders(data: Dict[str, Any], storage_bucket: Bucket, params: Dict[str, str] = None):
-    start_date = params.get('dataInicial').replace("-", "")
-    end_date = params.get('dataFinal').replace("-", "")
+    records = data.get('orders', [])
     
-    destination_blob_name = f"raw/sales_data/week_{start_date}_{end_date}/raw_sales_orders_{start_date}_{end_date}.json"
+    if not records:
+        logger.warning("Nenhum registro encontrado na chave 'orders' para salvar.")
+        return
+
+    ndjson_lines = [json.dumps(record) + "\n" for record in records]
+
+    partition_date = params.get('dataFinal')
+    
+    destination_blob_name = f"raw/sales_data/dt={partition_date}/raw_sales_orders.ndjson"
 
     blob = storage_bucket.blob(destination_blob_name)
 
     blob.upload_from_string(
-        data=json.dumps(data, ensure_ascii=False, indent=4),
-        content_type="application/json"
+        data="\n".join(ndjson_lines),
+        content_type="application/octet-stream"
     )
     
     logger.info(f"Salvando dados de pedidos de venda em: gs://{storage_bucket.name}/{destination_blob_name}...")
