@@ -203,7 +203,7 @@ def handle_requests(client: BlingClient, endpoint: str, ids_dict: Dict[str, str]
         sys.exit(1)
 
 def save_raw_products(data: Dict[str, Any], storage_bucket: Bucket):
-    destination_blob_name = "raw/products_data/raw_products.json"
+    destination_blob_name = "raw/products_data/raw_products.ndjson"
 
     blob = storage_bucket.blob(destination_blob_name)
 

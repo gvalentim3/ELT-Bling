@@ -209,7 +209,7 @@ def save_raw_sales_orders(data: Dict[str, Any], storage_bucket: Bucket, params: 
         logger.warning("Nenhum registro encontrado na chave 'orders' para salvar.")
         return
 
-    ndjson_lines = [json.dumps(record) + "\n" for record in records]
+    ndjson_lines = [json.dumps(record, ensure_ascii=False, separators=(',', ':')) for record in records]
 
     partition_date = params.get('dataFinal')
     
@@ -217,9 +217,11 @@ def save_raw_sales_orders(data: Dict[str, Any], storage_bucket: Bucket, params: 
 
     blob = storage_bucket.blob(destination_blob_name)
 
+    ndjson_content = "\n".join(ndjson_lines)
+
     blob.upload_from_string(
-        data="\n".join(ndjson_lines),
-        content_type="application/octet-stream"
+        data=ndjson_content,
+        content_type="application/json"
     )
     
     logger.info(f"Salvando dados de pedidos de venda em: gs://{storage_bucket.name}/{destination_blob_name}...")

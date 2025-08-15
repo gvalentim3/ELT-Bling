@@ -30,7 +30,7 @@ def consolidate_sales_channels_results(data: List[Dict[str, Any]], params: Dict 
     }
 
 def save_raw_sales_channels(data: Dict[str, Any], storage_bucket: Bucket):
-    destination_blob_name = "raw/dim_data/raw_sales_channels.json"
+    destination_blob_name = "raw/dim_data/raw_sales_channels.ndjson"
 
     blob = storage_bucket.blob(destination_blob_name)
 

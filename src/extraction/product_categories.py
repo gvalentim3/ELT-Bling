@@ -28,7 +28,7 @@ def consolidate_product_categories_results(data: List[Dict[str, Any]], params: D
     }
 
 def save_raw_product_categories(data: Dict[str, Any], storage_bucket: Bucket) -> None:
-    destination_blob_name = "raw/dim_data/raw_product_categories.json"
+    destination_blob_name = "raw/dim_data/raw_product_categories.ndjson"
 
     blob = storage_bucket.blob(destination_blob_name)
 

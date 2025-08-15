@@ -15,7 +15,7 @@ from .common.bling_api_client import BlingClient
 
 logger = logging.getLogger(__name__)
 
-def consolidate_sales_situations_results(data: List[Dict[str, Any]], params: Dict = {}) -> Dict[str, Any]:
+def consolidate_sales_status_results(data: List[Dict[str, Any]], params: Dict = {}) -> Dict[str, Any]:
     metadata = {
         "extraction_timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "extraction_params": params,
@@ -27,8 +27,8 @@ def consolidate_sales_situations_results(data: List[Dict[str, Any]], params: Dic
         "data": data
     }
 
-def save_raw_sales_situations(data: Dict[str, Any], storage_bucket: Bucket) -> None:
-    destination_blob_name = "raw/dim_data/raw_sales_situations.json"
+def save_raw_sales_status(data: Dict[str, Any], storage_bucket: Bucket) -> None:
+    destination_blob_name = "raw/dim_data/raw_sales_status.ndjson"
 
     blob = storage_bucket.blob(destination_blob_name)
 
@@ -37,19 +37,19 @@ def save_raw_sales_situations(data: Dict[str, Any], storage_bucket: Bucket) -> N
         content_type="application/json"
     )
     
-    logger.info(f"Salvando dados de situações de venda em: gs://{storage_bucket.name}/{destination_blob_name}...")
+    logger.info(f"Salvando dados de status de venda em: gs://{storage_bucket.name}/{destination_blob_name}...")
 
-def extract_sales_situations(client: BlingClient, storage_bucket: Bucket) -> Optional[List[Dict[str, Any]]]:
+def extract_sales_status(client: BlingClient, storage_bucket: Bucket) -> Optional[List[Dict[str, Any]]]:
     try:
-        logger.info("Extraindo as situações de venda no Bling!")
+        logger.info("Extraindo as status de venda no Bling!")
         response = client.get(endpoint="situacoes/modulos/98310")
 
         data = response.json()
 
-        consolidated_data = consolidate_sales_situations_results(data=data.get('data', []))
+        consolidated_data = consolidate_sales_status_results(data=data.get('data', []))
     
-        save_raw_sales_situations(data=consolidated_data, storage_bucket=storage_bucket)
+        save_raw_sales_status(data=consolidated_data, storage_bucket=storage_bucket)
 
     except requests.exceptions.RequestException as e:
-        logger.error(f"Erro ao extrair situações de venda: {e}")
+        logger.error(f"Erro ao extrair status de venda: {e}")
         return None
