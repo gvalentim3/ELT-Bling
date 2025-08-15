@@ -33,7 +33,6 @@ def run_weekly_extraction():
     )
 
 
-# --- Endpoint da API ---
 @app.route("/", methods=["POST"])
 def trigger_extraction():
     try:
@@ -42,5 +41,3 @@ def trigger_extraction():
     except Exception as e:
         print(f"🚨 Erro na execução da pipeline: {e}", file=sys.stderr)
         return f"Erro interno no servidor: {e}", 500
-
-extraction()
