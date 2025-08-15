@@ -202,15 +202,19 @@ def handle_requests(client: BlingClient, endpoint: str, ids_dict: Dict[str, str]
         logger.error(f"Erro: {e}")
         sys.exit(1)
 
-def save_raw_products(data: Dict[str, Any], storage_bucket: Bucket):
+def save_raw_products_ndjson(data: Dict[str, Any], storage_bucket: Bucket) -> None:
     destination_blob_name = "raw/products_data/raw_products.ndjson"
-
     blob = storage_bucket.blob(destination_blob_name)
 
-    blob.upload_from_string(
-        data=json.dumps(data, ensure_ascii=False, indent=4),
-        content_type="application/json"
-    )
+    ndjson_lines = []
+    if "metadata" in data:
+        ndjson_lines.append(json.dumps({"metadata": data["metadata"]}, ensure_ascii=False))
+    
+    for record in data.get("data", []):
+        ndjson_lines.append(json.dumps(record, ensure_ascii=False))
+    
+    ndjson_string = "\n".join(ndjson_lines)
+    blob.upload_from_string(ndjson_string, content_type="application/x-ndjson")
     
     logger.info(f"Salvando dados de produtos em: gs://{storage_bucket.name}/{destination_blob_name}...")
  
@@ -227,4 +231,4 @@ def products_extraction(client: BlingClient, storage_bucket: Bucket):
 
     data = handle_requests(client=client, endpoint=endpoint, ids_dict=ids_dict, params=params)
 
-    save_raw_products(data=data, storage_bucket=storage_bucket)
+    save_raw_products_ndjson(data=data, storage_bucket=storage_bucket)

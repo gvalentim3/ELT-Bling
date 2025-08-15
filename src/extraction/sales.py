@@ -202,26 +202,29 @@ def handle_requests(client: BlingClient, endpoint: str, ids_dict: Dict[str, str]
         logger.error(f"Erro: {e}")
         sys.exit(1)
 
-def save_raw_sales_orders(data: Dict[str, Any], storage_bucket: Bucket, params: Dict[str, str] = None):
+def save_raw_sales_orders_ndjson(data: Dict[str, Any], storage_bucket: Bucket, params: Dict[str, str] = None):
     records = data.get('orders', [])
     
     if not records:
         logger.warning("Nenhum registro encontrado na chave 'orders' para salvar.")
         return
 
-    ndjson_lines = [json.dumps(record, ensure_ascii=False, separators=(',', ':')) for record in records]
+    metadata = data.get("metadata", {})
 
-    partition_date = params.get('dataFinal')
+    ndjson_lines = [json.dumps({"metadata": metadata}, ensure_ascii=False)]
+
+    ndjson_lines.extend([json.dumps(record, ensure_ascii=False, separators=(',', ':')) for record in records])
+
+    partition_date = params.get('dataFinal') if params else 'unknown_date'
     
     destination_blob_name = f"raw/sales_data/dt={partition_date}/raw_sales_orders.ndjson"
-
     blob = storage_bucket.blob(destination_blob_name)
 
     ndjson_content = "\n".join(ndjson_lines)
 
     blob.upload_from_string(
         data=ndjson_content,
-        content_type="application/json"
+        content_type="application/x-ndjson"
     )
     
     logger.info(f"Salvando dados de pedidos de venda em: gs://{storage_bucket.name}/{destination_blob_name}...")
@@ -253,4 +256,4 @@ def sales_extraction(client: BlingClient, dataInicial: str, dataFinal: str, stor
 
     data = handle_requests(client=client, endpoint=endpoint, ids_dict=ids_dict, params=params)
 
-    save_raw_sales_orders(data, storage_bucket=storage_bucket, params=params)
+    save_raw_sales_orders_ndjson(data, storage_bucket=storage_bucket, params=params)
