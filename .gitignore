@@ -6,3 +6,5 @@ __pycache__
 .vscode
 state.json
 credentials
+logs
+*.pbix
