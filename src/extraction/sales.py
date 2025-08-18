@@ -168,7 +168,7 @@ def consolidate_results(results: Dict, params: Dict, client: BlingClient = None,
     
     consolidated["metadata"]["total_orders"] = len(consolidated["orders"])
     
-    logger.info(f"Consolidação completa: {consolidated['metadata']['total_orders']} produtos extraídos com sucesso")
+    logger.info(f"Consolidação completa: {consolidated['metadata']['total_orders']} pedidos de venda extraídos com sucesso")
     if consolidated["metadata"]["failed_extractions"] > 0:
         logger.warning(f"{consolidated['metadata']['failed_extractions']} extrações permanentemente falharam")
 
