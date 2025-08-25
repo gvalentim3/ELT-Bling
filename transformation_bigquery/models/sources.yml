@@ -1,0 +1,21 @@
+version: 2
+
+sources:
+  - name: bronze_bling
+    database: eletrofor
+    schema: bronze_bling
+    tables:
+      - name: raw_categories
+        description: "Tabela externa com os dados brutos de categorias extraídas através da API do Bling"
+
+      - name: raw_products
+        description: "Tabela externa com os dados brutos de produtos extraídos através da API do Bling"
+
+      - name: raw_sales
+        description: "Tabela externa com os dados brutos de vendas extraídos através da API do Bling"
+      
+      - name: raw_sales_channels
+        description: "Tabela externa com os dados brutos de canais de venda extraídos através da API do Bling"
+
+      - name: raw_status
+        description: "Tabela externa com os dados brutos de situações de venda extraídos através da API do Bling"
