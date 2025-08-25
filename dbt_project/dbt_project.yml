@@ -1,5 +1,4 @@
-# This setting configures which "profile" dbt uses for this project.
-name: transformation_bigquery
+name: dbt_project
 profile: transformation_bigquery
 version: '1.0.0'
 
@@ -25,7 +24,7 @@ clean-targets:         # directories to be removed by `dbt clean`
 # directory as views. These settings can be overridden in the individual model
 # files using the `{{ config(...) }}` macro.
 models:
-  transformation_bigquery:
+  dbt_project:
     staging_bling:
       +schema: staging_bling
       +materialized: view
