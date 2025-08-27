@@ -23,9 +23,12 @@ WITH base_exploded_items AS (
 
 SELECT
     b.component_product_id,
+    p.product_name,
     b.order_date,
     SUM(b.final_quantity) AS total_quantity_sold
 
 FROM base_exploded_items b
+LEFT JOIN {{ ref('dim_products') }} as p
+ON b.component_product_id = p.product_id
 GROUP BY
-    component_product_id, order_date
+    component_product_id, order_date, product_name

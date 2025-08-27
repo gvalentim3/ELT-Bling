@@ -1,5 +1,5 @@
 name: dbt_project
-profile: transformation_bigquery
+profile: dbt_eletrofor
 version: '1.0.0'
 
 # These configurations specify where dbt should look for different types of files.

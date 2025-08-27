@@ -1,0 +1,10 @@
+dbt_eletrofor:
+  target: prod
+  outputs:
+    prod:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT_ID') }}"
+      dataset: staging_bling
+      threads: 4
+      timeout_seconds: 300

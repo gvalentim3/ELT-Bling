@@ -28,6 +28,7 @@ SELECT
     od.order_date,
 
     oi.product_id,
+    p.product_name,
     oi.product_id_for_merge,
     oi.quantity,
     oi.order_unit_price,

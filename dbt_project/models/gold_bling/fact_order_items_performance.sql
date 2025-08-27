@@ -23,6 +23,7 @@ categories AS (
 
 SELECT
     oi.product_id,
+    p.product_name,
     oi.product_id_for_merge,
     od.order_date,
     SUM(oi.order_unit_price * oi.quantity) AS gross_revenue, 
@@ -41,6 +42,7 @@ LEFT JOIN categories c
 
 GROUP BY 
     oi.product_id,
+    p.product_name,
     oi.product_id_for_merge,
     od.order_date,
     c.category_name
