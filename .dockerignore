@@ -1,0 +1,11 @@
+.venv
+.vscode
+data
+exemplos
+logs
+pipelines/first_extraction
+*/__pycache__
+.env
+.gitignore
+credentials
+*.pbix
