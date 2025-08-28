@@ -1,6 +1,6 @@
 .venv
 .env
-data/raw/*.json
+data/
 exemplos
 __pycache__
 .vscode
