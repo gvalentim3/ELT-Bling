@@ -14,6 +14,8 @@ O pipeline segue uma arquitetura moderna, utilizando ferramentas da Google Cloud
 - Carregamento (Load): Os dados brutos (raw) são carregados em um bucket no Google Cloud Storage (GCS), servindo como nossa camada Bronze (fonte de verdade).
 - Transformação (Transform): O dbt é utilizado para transformar os dados armazenados no Google BigQuery, aplicando regras de negócio, limpeza e modelagem para criar as camadas Staging (colunas renomeadas), Silver (dados limpos e enriquecidos) e Gold (dados agregados e prontos para consumo).
 
+<img width="4908" height="3346" alt="Arquitetura Pipeline" src="https://github.com/user-attachments/assets/4c54ed5a-cecb-4e72-9d31-73b5f5fb1455" />
+
 ## 🛠️ Tecnologias Utilizadas
 - Extração: Python
 - Transformação: dbt (Data Build Tool)
